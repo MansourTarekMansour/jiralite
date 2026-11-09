@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>JiraLite ERD</title>
+  <style>
+    :root{--b:#080d16;--c:#151d30;--h:#1d2940;--l:#708099;--t:#eef2f8;--m:#a8b3c7;--a:#818cf8;--p:#fbbf24;--f:#c084fc}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--b);color:var(--t);font:13px Arial}
+    header{padding:22px 28px;border-bottom:1px solid #26344b}
+    h1{margin:0 0 5px;color:var(--a)}
+    p{margin:0 0 4px;color:var(--m);max-width:1500px}
+    main{overflow:auto;padding:20px}
+    .canvas{position:relative;width:1800px;height:1400px}
+    svg{position:absolute;width:100%;height:100%;pointer-events:none}
+    .edge{fill:none;stroke:var(--l);stroke-width:2}
+    .opt{stroke-dasharray:7 5}
+    .et{fill:var(--t);font-weight:bold;paint-order:stroke;stroke:var(--b);stroke-width:5}
+    .table{position:absolute;width:480px;background:var(--c);border:1px solid #35445f;border-radius:9px;overflow:hidden}
+    .main{border:2px solid var(--a)}
+    .ext{width:360px;border:1px dashed #56657f;opacity:.9}
+    .ext h2{color:var(--m)}
+    h2{font-size:15px;margin:0;padding:11px;background:var(--h);color:var(--a)}
+    h2 small{float:right;font-weight:normal;color:var(--m);font-size:11px;margin-top:2px}
+    .row{display:grid;grid-template-columns:1fr 140px 110px;gap:5px;padding:5px 10px;border-top:1px solid #26344b}
+    .ext .row{grid-template-columns:1fr 110px 55px}
+    .row span:nth-child(2){color:var(--m);font-family:monospace}
+    .pk{color:var(--p)}
+    .fk{color:var(--f)}
+    .uk{color:#34d399}
+    .sec{padding:7px 10px;background:#0f1929;color:var(--a);font-size:11px;font-weight:bold;text-transform:uppercase}
+    .note{padding:6px 10px;border-top:1px solid #26344b;color:var(--m);font-size:12px}
+    .legend{display:flex;gap:16px;margin-top:10px;color:var(--m);font-size:12px}
+    .legend b{display:inline-block;width:14px;height:10px;margin-right:5px;vertical-align:middle;border-radius:2px}
+    .exports{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .exports button{background:var(--h);color:var(--t);border:1px solid #35445f;border-radius:7px;padding:8px 11px;cursor:pointer}
+    .exports button:hover{border-color:var(--a)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>JiraLite Entity Relationship Diagram (ERD)</h1>
+    <p>Simplified Jira & Agile Task Tracking system with Role-Based Access Control (RBAC), multi-tenant project separation, and immutable audit logging.</p>
+    <div class="legend">
+      <span><b style="border:2px solid var(--a)"></b>Tracker-owned table</span>
+      <span><b style="border:1px dashed #56657f"></b>Existing Django auth_user</span>
+      <span class="pk">PK</span><span class="fk">FK</span><span class="uk">UK</span>
+      <span>NN = required, NULL = optional</span>
+      <span>- - - optional relation (0..1:N)</span>
+    </div>
+    <div class="exports">
+      <button onclick="exportPNG(2,this)">Export Large PNG</button>
+      <button onclick="exportJSON()">Export JSON</button>
+      <button onclick="exportSQL()">Export SQL</button>
+      <button onclick="window.print()">Print / PDF</button>
+    </div>
+  </header>
+  <main>
+    <div id="c" class="canvas">
+      <svg id="s">
+        <defs>
+          <marker id="o" orient="auto" markerWidth="10" markerHeight="10" refX="5" refY="5"><path d="M5 0V10" stroke="var(--l)" stroke-width="2"/></marker>
+          <marker id="n" orient="auto" markerWidth="12" markerHeight="12" refX="11" refY="6"><path d="M11 6L1 1M11 6L1 6M11 6L1 11" stroke="var(--l)" stroke-width="2" fill="none"/></marker>
+        </defs>
+      </svg>
+    </div>
+  </main>
+  <script>
+    // [table_name, posX, posY, kind, fields, badge]
+    const T=[
+      // 1. Users at TOP CENTER (Central Auth Hub)
+      ["users", 680, 50, 3, [
+        "id|BIGINT|PK,NN",
+        "username|VARCHAR(150)|UK,NN",
+        "email|VARCHAR(254)|NN",
+        "is_staff|BOOLEAN|NN,DEFAULT 0"
+      ], "auth_user (Django Core)"],
+
+      // 2. Projects at MIDDLE LEFT
+      ["projects", 60, 340, 1, [
+        "id|BIGINT|PK,NN",
+        "name|VARCHAR(100)|NN",
+        "key|VARCHAR(10)|UK,NN",
+        "description|TEXT|NULL",
+        "lead_id|BIGINT|FK,NN",
+        "@Cached counters",
+        "total_issues_count|UNSIGNED INT|NN,DEFAULT 0",
+        "open_issues_count|UNSIGNED INT|NN,DEFAULT 0",
+        "@Timestamps",
+        "created_at|TIMESTAMP|NN",
+        "updated_at|TIMESTAMP|NN",
+        "#key is uppercase (e.g. JIRA, PROJ). lead_id references auth_user."
+      ], "Project Workspace"],
+
+      // 3. Project Members at BOTTOM LEFT (under Projects)
+      ["project_members", 60, 890, 1, [
+        "id|BIGINT|PK,NN",
+        "project_id|BIGINT|FK,NN",
+        "user_id|BIGINT|FK,NN",
+        "role|VARCHAR(20)|NN,DEFAULT Developer",
+        "joined_at|TIMESTAMP|NN",
+        "#Roles: Admin, Developer, Viewer. UNIQUE(project_id, user_id)."
+      ], "RBAC Membership"],
+
+      // 4. Issues at MIDDLE RIGHT
+      ["issues", 1180, 340, 1, [
+        "id|BIGINT|PK,NN",
+        "project_id|BIGINT|FK,NN",
+        "issue_key|VARCHAR(20)|UK,NN",
+        "title|VARCHAR(200)|NN",
+        "description|TEXT|NULL",
+        "issue_type|VARCHAR(20)|NN,DEFAULT Task",
+        "priority|VARCHAR(20)|NN,DEFAULT Medium",
+        "status|VARCHAR(20)|NN,DEFAULT To Do",
+        "@Parties",
+        "reporter_id|BIGINT|FK,NN",
+        "assignee_id|BIGINT|FK,NULL",
+        "@Timestamps",
+        "created_at|TIMESTAMP|NN",
+        "updated_at|TIMESTAMP|NN",
+        "#type: Bug, Task, Story. status: To Do, In Progress, Done. INDEX(project_id, status)."
+      ], "Kanban Issues"],
+
+      // 5. Activity Logs at BOTTOM RIGHT (under Issues)
+      ["issue_activity_logs", 1180, 940, 1, [
+        "id|BIGINT|PK,NN",
+        "issue_id|BIGINT|FK,NN",
+        "user_id|BIGINT|FK,NULL",
+        "action|VARCHAR(80)|NN",
+        "old_status|VARCHAR(20)|NULL",
+        "new_status|VARCHAR(20)|NULL",
+        "comment|TEXT|NULL",
+        "created_at|TIMESTAMP|NN",
+        "#Audit trail of transitions and assignments. INDEX(issue_id, created_at)."
+      ], "Audit Trail"]
+    ];
+
+    const R=[
+      ["projects","project_members","1","N","project_id"],
+      ["users","project_members","1","N","user_id"],
+      ["projects","issues","1","N","project_id"],
+      ["users","projects","1","N","lead_id"],
+      ["users","issues","1","N","reporter_id"],
+      ["users","issues","0..1","N","assignee_id"],
+      ["issues","issue_activity_logs","1","N","issue_id"],
+      ["users","issue_activity_logs","0..1","N","user_id"]
+    ];
+
+    const c=document.getElementById('c'),s=document.getElementById('s'),M={};
+    T.forEach(([n,x,y,m,F,tag])=>{
+      let e=document.createElement('section');
+      e.className='table '+(m===1?'main':m===2?'lookup':'ext');
+      e.style.cssText=`left:${x}px;top:${y}px`;
+      e.innerHTML=`<h2>${n}${tag?`<small>${tag}</small>`:''}</h2>`+F.map(v=>v[0]=='@'?`<div class=sec>${v.slice(1)}</div>`:v[0]=='#'?`<div class=note>${v.slice(1)}</div>`:(()=>{let[a,t,k='']=v.split('|'),cl=k.includes('PK')?'pk':k.includes('FK')?'fk':k.includes('UK')?'uk':'';return `<div class=row><b>${a}</b><span>${t}</span><span class="${cl}">${k}</span></div>`})()).join('');
+      c.append(e);
+      M[n]=e
+    });
+
+    (document.fonts?document.fonts.ready:Promise.resolve()).then(()=>R.forEach(([a,b,x,y,label])=>{
+      let A=M[a],B=M[b],
+          ax=A.offsetLeft+A.offsetWidth/2,ay=A.offsetTop+A.offsetHeight/2,
+          bx=B.offsetLeft+B.offsetWidth/2,by=B.offsetTop+B.offsetHeight/2,
+          d,mx,my;
+      if(a===b){
+        let x1=A.offsetLeft+A.offsetWidth,y1=A.offsetTop+40,y2=A.offsetTop+110;
+        d=`M${x1} ${y1} C${x1+90} ${y1},${x1+90} ${y2},${x1} ${y2}`;mx=x1+50;my=(y1+y2)/2
+      }else if(Math.abs(bx-ax)>=Math.abs(by-ay)){
+        let right=bx>=ax,x1=right?A.offsetLeft+A.offsetWidth:A.offsetLeft,x2=right?B.offsetLeft:B.offsetLeft+B.offsetWidth,m=(x1+x2)/2;
+        d=`M${x1} ${ay} C${m} ${ay},${m} ${by},${x2} ${by}`;mx=m;my=(ay+by)/2
+      }else{
+        let down=by>=ay,y1=down?A.offsetTop+A.offsetHeight:A.offsetTop,y2=down?B.offsetTop:B.offsetTop+B.offsetHeight,m=(y1+y2)/2;
+        d=`M${ax} ${y1} C${ax} ${m},${bx} ${m},${bx} ${y2}`;mx=(ax+bx)/2;my=m
+      }
+      let p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d',d);
+      p.setAttribute('class','edge'+(x==='0..1'?' opt':''));
+      p.setAttribute('marker-start','url(#o)');
+      p.setAttribute('marker-end',y=='N'?'url(#n)':'url(#o)');
+      s.append(p);
+      let t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',mx+5);
+      t.setAttribute('y',my-5);
+      t.setAttribute('class','et');
+      t.textContent=x+':'+y+(label?' '+label:'');
+      s.append(t)
+    }));
+
+    function save(content,ext,type){
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([content],{type}));
+      a.download='jiralite-erd.'+ext;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),500)
+    }
+    function schema(){
+      return T.map(([name,,,kind,fields])=>({name,owned:kind===1,lookup:kind===2,external:kind===3,fields:fields.filter(f=>!'@#'.includes(f[0])).map(f=>{const[name,type,constraints='']=f.split('|');return{name,type,constraints:constraints.split(',').filter(Boolean)}})}))
+    }
+    function exportJSON(){
+      save(JSON.stringify({diagram:'JiraLite ERD',tables:schema(),relationships:R.map(([from,to,fromCardinality,toCardinality,via])=>({from,to,fromCardinality,toCardinality,via:via||null}))},null,2),'json','application/json')
+    }
+    function exportSQL(){
+      const out=schema().map(t=>t.external?`-- ${t.name}: existing Django core auth_user table`:`CREATE TABLE ${t.name} (\n${t.fields.map(f=>{let parts=[`  ${f.name} ${f.type}`];if(f.constraints.includes('NN'))parts.push('NOT NULL');if(f.constraints.includes('NULL'))parts.push('NULL');const d=f.constraints.find(c=>c.startsWith('DEFAULT '));if(d)parts.push(d);if(f.constraints.includes('PK'))parts.push('PRIMARY KEY');if(f.constraints.includes('UK'))parts.push('UNIQUE');return parts.join(' ')}).join(',\n')}\n);`).join('\n\n');
+      save('-- JiraLite SQL Schema draft\n\n'+out,'sql','text/sql')
+    }
+    function renderERD(scale=2){
+      const c=document.getElementById('c'),s=document.getElementById('s'),base=c.getBoundingClientRect(),W=c.offsetWidth,H=c.offsetHeight,cv=document.createElement('canvas');
+      cv.width=W*scale;cv.height=H*scale;const g=cv.getContext('2d');g.scale(scale,scale);
+      const root=getComputedStyle(document.documentElement),v=n=>root.getPropertyValue(n).trim(),box=e=>{const r=e.getBoundingClientRect();return{x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height}},filled=col=>col&&col!=='transparent'&&!/rgba\(.*,\s*0\)$/.test(col);
+      g.fillStyle=getComputedStyle(document.body).backgroundColor;g.fillRect(0,0,W,H);
+      const mark=(x,y,a,crow)=>{g.save();g.translate(x,y);g.rotate(a);g.beginPath();if(crow){g.moveTo(0,0);g.lineTo(-10,-5);g.moveTo(0,0);g.lineTo(-10,0);g.moveTo(0,0);g.lineTo(-10,5)}else{g.moveTo(0,-5);g.lineTo(0,5)}g.stroke();g.restore()};
+      g.strokeStyle=v('--l');g.lineWidth=2;
+      s.querySelectorAll('path.edge').forEach(p=>{const d=p.getAttribute('d'),n=(d.match(/-?\d+(\.\d+)?/g)||[]).map(Number),k=n.length;g.setLineDash(p.classList.contains('opt')?[7,5]:[]);g.stroke(new Path2D(d));g.setLineDash([]);mark(n[0],n[1],Math.atan2(n[3]-n[1],n[2]-n[0]),false);mark(n[k-2],n[k-1],Math.atan2(n[k-1]-n[k-3],n[k-2]-n[k-4]),p.getAttribute('marker-end').includes('#n'))});
+      g.font='bold 13px Arial';g.textBaseline='alphabetic';g.lineJoin='round';
+      s.querySelectorAll('text.et').forEach(t=>{const x=+t.getAttribute('x'),y=+t.getAttribute('y');g.lineWidth=5;g.strokeStyle=v('--b');g.strokeText(t.textContent,x,y);g.fillStyle=v('--t');g.fillText(t.textContent,x,y)});
+      c.querySelectorAll('.table').forEach(t=>{const cs=getComputedStyle(t),b=box(t),r=parseFloat(cs.borderTopLeftRadius)||0,bw=parseFloat(cs.borderTopWidth)||1;g.save();g.globalAlpha=parseFloat(cs.opacity)||1;g.beginPath();g.roundRect(b.x,b.y,b.w,b.h,r);g.fillStyle=cs.backgroundColor;g.fill();g.save();g.clip();t.querySelectorAll('*').forEach(e=>{const es=getComputedStyle(e),eb=box(e);if(filled(es.backgroundColor)){g.fillStyle=es.backgroundColor;g.fillRect(eb.x,eb.y,eb.w,eb.h)}const tw=parseFloat(es.borderTopWidth);if(tw&&es.borderTopStyle!=='none'){g.fillStyle=es.borderTopColor;g.fillRect(eb.x,eb.y,eb.w,tw)}});const walker=document.createTreeWalker(t,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){const es=getComputedStyle(node.parentElement);g.font=`${es.fontStyle} ${es.fontWeight} ${es.fontSize} ${es.fontFamily}`;g.fillStyle=es.color;g.textBaseline='middle';for(const m of node.data.matchAll(/\S+/g)){const rg=document.createRange();rg.setStart(node,m.index);rg.setEnd(node,m.index+m[0].length);const rr=rg.getBoundingClientRect();g.fillText(m[0],rr.left-base.left,rr.top-base.top+rr.height/2)}}g.restore();g.lineWidth=bw;g.strokeStyle=cs.borderTopColor;g.setLineDash(cs.borderTopStyle==='dashed'?[6,4]:[]);g.beginPath();g.roundRect(b.x+bw/2,b.y+bw/2,b.w-bw,b.h-bw,r);g.stroke();g.restore()});
+      return cv
+    }
+    async function exportPNG(scale=2,button=null){
+      try{button&&(button.disabled=true);const cv=renderERD(scale),blob=await new Promise(res=>cv.toBlob(res,'image/png'));if(!blob)throw new Error('PNG encoding failed');const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jiralite-erd.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(error){alert('PNG export failed: '+error.message)}finally{button&&(button.disabled=false)}
+    }
+  </script>
+</body>
+</html>
