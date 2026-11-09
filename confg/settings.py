@@ -49,6 +49,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
+    #####
+    'tracker.middleware.RequestTimingMiddleware',
+    'tracker.middleware.ProjectContextMiddleware',
 ]
 
 ROOT_URLCONF = 'confg.urls'
@@ -80,7 +84,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'jiralite',       # اسم قاعدة البيانات التي أنشأتها في MySQL
         'USER': 'root',           # اسم المستخدم
-        'PASSWORD': 'your_password', # كلمة المرور
+        'PASSWORD': 'password', # كلمة المرور
         'HOST': '127.0.0.1',
         'PORT': '3306',
         'OPTIONS': {
